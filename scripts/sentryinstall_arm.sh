@@ -302,16 +302,16 @@ install_sentry()
 	rpmbuild -bb --quiet sentry.spec
 	echo "编译完成"
 	cd ~/rpmbuild/RPMS/noarch
-	yum install -y apache-sentry-1.6.0_rc0-1.noarch.rpm
+	yum install -y -q apache-sentry-1.6.0_rc0-1.noarch.rpm
 
 	echo 'export SENTRY_HOME=/usr/local/apache-sentry/apache-sentry-1.6.0-incubating-bin'>>/etc/profile
-        choe 'export PATH=$PATH:$SENTRY_HOME/bin'>>/etc/profile
+        echo 'export PATH=$PATH:$SENTRY_HOME/bin'>>/etc/profile
 	env_enable
 
 	cp $DOWNLOAD_PATH/mysql-connector-java-5.1.47.jar $INSTALL_PATH/apache-sentry/apache-sentry-1.6.0-incubating-bin/lib/
 
 	# sentry config
-	\cp -f $WORKSPACE/../scripts/conf/sentey/sentry-site.xml $INSTALL_PATH/apache-sentry/apache-sentry-1.6.0-incubating-bin/conf/
+	\cp -f $WORKSPACE/../scripts/conf/sentry/sentry-site.xml $INSTALL_PATH/apache-sentry/apache-sentry-1.6.0-incubating-bin/conf/
 
 	chmod -R 755 $INSTALL_PATH/apache-sentry/apache-sentry-1.6.0-incubating-bin
 	cp $INSTALL_PATH/apache-sentry/apache-sentry-1.6.0-incubating-bin/lib/jline-2.12.jar ${HADOOP_HOME}/share/hadoop/yarn/lib/
@@ -339,7 +339,7 @@ install_hive()
 	chmod -R 755 $INSTALL_PATH/apache-hive-1.1.0-bin
 	schematool -dbType mysql -initSchema
 	mkdir $DOWNLOAD_PATH/data
-	cat <<-EOF > /bigdata/data/events.csv
+	cat <<-EOF > /tmp/download/data/events.csv
 	10.1.2.3,US,android,createNote
 	10.200.88.99,FR,windows,updateNote
 	10.1.2.3,US,android,updateNote
