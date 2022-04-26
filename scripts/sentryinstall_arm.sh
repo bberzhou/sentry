@@ -303,7 +303,6 @@ install_sentry()
 	echo "编译完成"
 	cd ~/rpmbuild/RPMS/noarch
 	yum install -y -q apache-sentry-1.6.0_rc0-1.noarch.rpm
-
 	echo 'export SENTRY_HOME=/usr/local/apache-sentry/apache-sentry-1.6.0-incubating-bin'>>/etc/profile
         echo 'export PATH=$PATH:$SENTRY_HOME/bin'>>/etc/profile
 	env_enable
@@ -329,6 +328,10 @@ install_hive()
 	sleep 2
 	cd $INSTALL_PATH
 	tar -zxf $DOWNLOAD_PATH/apache-hive-1.1.0-bin.tar.gz -C ./
+	echo 'export HIVE_HOME=/usr/local/apache-hive-1.1.0-bin'>>/etc/profile
+        echo 'export PATH=$PATH:$HIVE_HOME/bin'>>/etc/profile
+        env_enable
+
 	cp $DOWNLOAD_PATH/mysql-connector-java-5.1.47.jar $INSTALL_PATH/apache-hive-1.1.0-bin/lib/
 	\cp -f $WORKSPACE/../scripts/conf/hive/sentry-site.xml $INSTALL_PATH/apache-hive-1.1.0-bin/conf/
 
@@ -351,7 +354,7 @@ install_hive()
 	su - hive <<-EOF
 	kinit -kt /etc/hive/conf/hive.keytab hive/localhost@EXAMPLE.COM;
 	klist;
-	hive -e "create database if not exists sensitive; create table if not exists sensitive.events (ip STRING, country STRING, client STRING, action STRING) ROW FORMAT DELIMITED FIELDS TERMINATED BY ','; load data local inpath '/bigdata/data/events.csv' overwrite into table sensitive.events; create database if not exists filtered; create view if not exists filtered.events as select country, client, action from sensitive.events; create view if not exists filtered.events_usonly as select * from filtered.events where country = 'US';select * from sensitive.events;";
+	hive -e "create database if not exists sensitive; create table if not exists sensitive.events (ip STRING, country STRING, client STRING, action STRING) ROW FORMAT DELIMITED FIELDS TERMINATED BY ','; load data local inpath '/tmp/download/data/events.csv' overwrite into table sensitive.events; create database if not exists filtered; create view if not exists filtered.events as select country, client, action from sensitive.events; create view if not exists filtered.events_usonly as select * from filtered.events where country = 'US';select * from sensitive.events;";
 	exit;
 	EOF
     

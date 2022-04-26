@@ -2,9 +2,9 @@
 
 start_sentry(){
 	echo "开始启动sentry...................."
-	nohup sentry --command service --conffile  ${SENTRY_HOME}/conf/sentry-site.xml >> /bigdata/logs/sentry.log 2>&1 &
+	nohup sentry --command service --conffile  ${SENTRY_HOME}/conf/sentry-site.xml >> /tmp/download/logs/sentry.log 2>&1 &
 	sleep 3
-	tail -n 15 /bigdata/logs/sentry.log 
+	tail -n 15 /tmp/download/logs/sentry.log 
 	echo "sentry启动完成...................."
 }
 
@@ -43,7 +43,7 @@ start_hadoop(){
 }
 
 stop_hadoop(){
-	chmod -R 777 /bigdata/hadoop-2.6.0/logs/
+	chmod -R 777 /tmp/download/hadoop-2.6.0/logs/
 	u - yarn <<-EOF
 	kinit -kt /etc/hadoop/conf/yarn.keytab yarn/localhost@EXAMPLE.COM
 	klist;
@@ -73,8 +73,8 @@ start_hive(){
 	su - hive <<-EOF
 	kinit -kt /etc/hive/conf/hive.keytab hive/localhost@EXAMPLE.COM;
 	klist;
-	nohup hive --service metastore >> /bigdata/logs/hive-metastore.log 2>&1 &
-	nohup hive --service hiveserver2 >> /bigdata/logs/hive-server2.log 2>&1 &
+	nohup hive --service metastore >> /tmp/download/logs/hive-metastore.log 2>&1 &
+	nohup hive --service hiveserver2 >> /tmp/download/hive-server2.log 2>&1 &
 	exit;
 	EOF
 	echo "hive2启动中........."
