@@ -67,8 +67,11 @@ install_mysql()
 	echo "开始配置Mysql........................................."
 	sleep 2
 	cd $INSTALL_PATH
-	tar -xf $DOWNLOAD_PATH/mysql-5.7.27-aarch64.tar.gz -c ./
+	tar -xf $DOWNLOAD_PATH/mysql-5.7.27-aarch64.tar.gz -C ./
 	mv $INSTALL_PATH/mysql-5.7.27-aarch64 $INSTALL_PATH/mysql
+	echo 'export MYSQL_HOME=/usr/local/mysql'>>/etc/profile
+        echo 'export PATH=$PATH:$MYSQL_HOME/bin'>>/etc/profile
+        env_enable
 	mkdir -p $INSTALL_PATH/mysql/logs
 	ln -sf $INSTALL_PATH/mysql/my.cnf /etc/my.cnf
 	cp -rf $INSTALL_PATH/mysql/extra/lib* /usr/lib64/
@@ -79,15 +82,12 @@ install_mysql()
 	cp -rf $INSTALL_PATH/mysql/support-files/mysql.server /etc/init.d/mysqld
 	chmod +x /etc/init.d/mysqld
 	systemctl enable mysqld
-	mysqld --initialize-insecure --user=mysql --basedir=$INSTALL_PATH/mysql --datadir=$INSTALL_PATH/mysql/data
+	mysqld --initialize-insecure --user=mysql --basedir=/usr/local/mysql --datadir=/usr/local/mysql/data
 	sleep 5
 	systemctl start mysqld
 	sleep 5
 	mysql -u root -e "create database sentry;CREATE USER sentry IDENTIFIED BY 'sentry';GRANT all ON sentry.* TO sentry@'%' IDENTIFIED BY 'sentry';GRANT ALL PRIVILEGES ON  *.* TO 'root'@'%' IDENTIFIED BY '123456';use mysql;update user set authentication_string=password('123456') where user = 'root' and host = 'localhost';flush privileges;"
 	sleep 5
-	echo 'export MYSQL_HOME=/usr/local/mysql'>>/etc/profile
-        echo 'export PATH=$PATH:$MYSQL_HOME/bin'>>/etc/profile
-	env_enable
 
 }
 
@@ -243,12 +243,11 @@ install_hadoop()
 	EOF
 	cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
 
-	tar -zxf $DOWNLOAD_PATH/hadoop-2.6.0.tar.gz -c ./
+	tar -zxf $DOWNLOAD_PATH/hadoop-2.6.0.tar.gz -C ./
 	echo 'export HADOOP_HOME=/usr/local/hadoop-2.6.0'>>/etc/profile
         echo 'export PATH=$PATH:$HADOOP_HOME/bin:$HADOOP_HOME/sbin'>>/etc/profile
 	env_enable
 	hadoop version
-	cd /bigdata/hadoop-2.6.0/etc/hadoop/
 	# 修改hadoop的配置文件
 	cd $WORKSPACE
 	\cp -f $WORKSPACE/../scripts/conf/hadoop/ssl-server.xml $INSTALL_PATH/hadoop-2.6.0/etc/hadoop/
@@ -299,9 +298,9 @@ install_sentry()
 	rpmdev-setuptree
 	cp $WORKSPACE/../spec/sentry.spec ~/rpmbuild/SPECS/
 	cp $WORKSPACE/../spec/apache-sentry-1.6.0_rc0.tar.gz ~/rpmbuild/SOURCES/
-	
 	cd ~/rpmbuild/SPECS
 	rpmbuild -bb --quiet sentry.spec
+	echo "编译完成"
 	cd ~/rpmbuild/RPMS/noarch
 	yum install -y apache-sentry-1.6.0_rc0-1.noarch.rpm
 
@@ -369,6 +368,7 @@ install_hive()
 main(){
 	download_pkg
 	install_depends
+	install_java
 	install_maven
 	install_mysql
 	install_kerberos
