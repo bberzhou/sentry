@@ -14,6 +14,7 @@ download_pkg()
 	# wget https://gitee.com/bberzhou/apache-sentry/raw/master/pkg/jce_policy-8.zip
 	# wget https://repo1.maven.org/maven2/mysql/mysql-connector-java/5.1.47/mysql-connector-java-5.1.47.jar
 	# wget https://archive.apache.org/dist/maven/maven-3/3.2.5/binaries/apache-maven-3.2.5-bin.tar.gz
+	# wget http://124.70.1.233/apache-sentry-1.6.0_rc0-1.noarch.rpm
         wget http://124.70.1.233/OpenJDK8U-jdk_aarch64_linux_hotspot_8u222b10.tar.gz
 	wget http://124.70.1.233/mysql-5.7.27-aarch64.tar.gz
 	wget http://124.70.1.233/hadoop-2.6.0.tar.gz
@@ -21,11 +22,6 @@ download_pkg()
 	wget http://124.70.1.233/apache-maven-3.2.5-bin.tar.gz
 	wget http://124.70.1.233/jce_policy-8.zip
 	wget http://124.70.1.233/mysql-connector-java-5.1.47.jar
-	# wget http://124.70.1.233/apache-sentry-1.6.0_rc0-1.noarch.rpm
-	yum install -y -q git
-	yum install -y -q libaio*
-	yum install -y -q gcc rpm-build rpm-devel rpmlint make python bash coreutils diffutils patch rpmdevtools expect
-	yum install -y -q krb5-libs krb5-server krb5-workstation krb5-devel
 
 	echo "所需软件包下载完成........................."
 }
@@ -34,43 +30,7 @@ install_depends()
 {
 	yum install -y -q git libaio* tar gcc rpm-build rpm-devel rpmlint make python bash coreutils diffutils patch rpmdevtools expect krb5-libs krb5-server krb5-workstation krb5-devel  
 }
-set_env()
-{	
-	echo "开始配置JDK........................................."
-	sleep 2
-	cd /bigdata/
-	tar -zxf OpenJDK8U-jdk_aarch64_linux_hotspot_8u222b10.tar.gz
 
-	cat <<-EOF >> /etc/profile
-	
-	#Java8     
-	export JAVA_HOME=/bigdata/jdk8u222-b10
-	export PATH=\$JAVA_HOME/bin:\$PATH
-	
-	#Maven
-	export MAVEN_HOME=/bigdata/apache-maven-3.2.5
-	export PATH=\$MAVEN_HOME/bin:\$PATH
-	
-	#Hadoop
-	export HADOOP_HOME=/bigdata/hadoop-2.6.0
-	export PATH=\$PATH:\$HADOOP_HOME/bin:\$HADOOP_HOME/sbin
-	
-	#Mysql
-	export MYSQL_HOME=/usr/local/mysql
-	export PATH=\$PATH:\$MYSQL_HOME/bin
-	
-	#Hive
-	export HIVE_HOME=/bigdata/apache-hive-1.1.0-bin
-	export PATH=\$PATH:\$HIVE_HOME/bin
-	
-	#Sentry
-	export SENTRY_HOME=/usr/local/apache-sentry/apache-sentry-1.6.0-incubating-bin
-	export PATH=\$PATH:\$SENTRY_HOME/bin
-	EOF
-
-	source /etc/profile
-	java -version
-}
 env_enable()
 {
 	source /etc/profile > /dev/null
@@ -89,8 +49,7 @@ install_maven()
 {
 	echo "开始配置Maven........................................."
 	cd $INSTALL_PATH
-	tar -zxf apache-maven-3.2.5-bin.tar.gz
-	mvn -v
+	tar -zxf $DOWNLOAD_PATH/apache-maven-3.2.5-bin.tar.gz -C ./
 	sed '55 a\<localRepository>/usr/local/apache-maven-3.2.5/repository</localRepository>' -i $INSTALL_PATH/apache-maven-3.2.5/conf/settings.xml
 	sed '159 a\<mirror>' -i $INSTALL_PATH/apache-maven-3.2.5/conf/settings.xml
 	sed '160 a\<id>huaweimaven</id>' -i $INSTALL_PATH/apache-maven-3.2.5/conf/settings.xml
@@ -101,6 +60,7 @@ install_maven()
 	echo 'export MAVEN_HOME=/usr/local/apache-maven-3.2.5'>>/etc/profile
         echo 'export PATH=$MAVEN_HOME/bin:$PATH'>>/etc/profile
 	env_enable
+	mvn -v
 }
 install_mysql()
 {	
@@ -108,18 +68,18 @@ install_mysql()
 	sleep 2
 	cd $INSTALL_PATH
 	tar -xf $DOWNLOAD_PATH/mysql-5.7.27-aarch64.tar.gz -c ./
-	mv /usr/local/mysql-5.7.27-aarch64 /usr/local/mysql
-	mkdir -p /usr/local/mysql/logs
-	ln -sf /usr/local/mysql/my.cnf /etc/my.cnf
-	cp -rf /usr/local/mysql/extra/lib* /usr/lib64/
+	mv $INSTALL_PATH/mysql-5.7.27-aarch64 $INSTALL_PATH/mysql
+	mkdir -p $INSTALL_PATH/mysql/logs
+	ln -sf $INSTALL_PATH/mysql/my.cnf /etc/my.cnf
+	cp -rf $INSTALL_PATH/mysql/extra/lib* /usr/lib64/
 	mv /usr/lib64/libstdc++.so.6 /usr/lib64/libstdc++.so.6.old
 	ln -s /usr/lib64/libstdc++.so.6.0.24 /usr/lib64/libstdc++.so.6
 	groupadd -r mysql && useradd -r -g mysql -s /sbin/nologin -M mysql
-	chown -R mysql:mysql /usr/local/mysql
-	cp -rf /usr/local/mysql/support-files/mysql.server /etc/init.d/mysqld
+	chown -R mysql:mysql $INSTALL_PATH/mysql
+	cp -rf $INSTALL_PATH/mysql/support-files/mysql.server /etc/init.d/mysqld
 	chmod +x /etc/init.d/mysqld
 	systemctl enable mysqld
-	mysqld --initialize-insecure --user=mysql --basedir=/usr/local/mysql --datadir=/usr/local/mysql/data
+	mysqld --initialize-insecure --user=mysql --basedir=$INSTALL_PATH/mysql --datadir=$INSTALL_PATH/mysql/data
 	sleep 5
 	systemctl start mysqld
 	sleep 5
@@ -131,7 +91,7 @@ install_mysql()
 
 }
 
-set_kerberos()
+install_kerberos()
 {	
 	echo "开始配置Kerberos........................................."
 	sleep 2
@@ -141,46 +101,9 @@ set_kerberos()
 	mv local_policy.jar $INSTALL_PATH/jdk8u222-b10/jre/lib/security
 	mv US_export_policy.jar $INSTALL_PATH/jdk8u222-b10/jre/lib/security
 	#  copy kerberos config file cp -f 
-	cat <<-EOF > /etc/krb5.conf
-	[logging]
-	 default = FILE:/var/log/krb5libs.log
-	 kdc = FILE:/var/log/krb5kdc.log
-	 admin_server = FILE:/var/log/kadmind.log
-	 
-	[libdefaults]
-	 default_realm = EXAMPLE.COM  
-	 dns_lookup_kdc = false
-	 dns_lookup_realm = false
-	 ticket_lifetime = 86400
-	 renew_lifetime = 604800
-	 forwardable = true
-	 default_tgs_enctypes = rc4-hmac des3-cbc-sha1 arcfour-hmac aes256-cts des-cbc-md5 des-cbc-crc
-	 default_tkt_enctypes = rc4-hmac des3-cbc-sha1 arcfour-hmac aes256-cts des-cbc-md5 des-cbc-crc
-	 permitted_enctypes = rc4-hmac des3-cbc-sha1 arcfour-hmac aes256-cts des-cbc-md5 des-cbc-crc
-	 udp_preference_limit = 1
-	 kdc_timeout = 3000
-	
-	[realms]
-	 EXAMPLE.COM = {
-	 kdc = localhost
-	 admin_server = localhost  
-	 }
-	EOF
-
-	cat <<-EOF > /var/kerberos/krb5kdc/kdc.conf
-	[kdcdefaults]
-	 kdc_ports = 88
-	 kdc_tcp_ports = 88
-
-	[realms]
-	 EXAMPLE.COM = {
-	  #master_key_type = aes256-cts
-	  acl_file = /var/kerberos/krb5kdc/kadm5.acl
-	  dict_file = /usr/share/dict/words
-	  admin_keytab = /var/kerberos/krb5kdc/kadm5.keytab
-	  supported_enctypes = aes256-cts:normal aes128-cts:normal
-	 }						
-	EOF
+	cd $WORKSPACE/
+	\cp -f $WORKSPACE/../scripts/conf/kerberos/krb5.conf /etc/krb5.conf
+	\cp -f $WORKSPACE/../scripts/conf/kerberos/kdc.conf /var/kerberos/krb5kdc/kdc.conf
 
 	expect <<-EOF
 	spawn kdb5_util create -r EXAMPLE.COM –s
@@ -210,20 +133,20 @@ set_kerberos()
 	chmod -R 755 /etc/hive
 	chmod -R 777 /tmp
 
-	kadmin.local -q "addprinc -randkey hdfs/localhost@EXAMPLE.COM   "
-	kadmin.local -q "addprinc -randkey mapred/localhost@EXAMPLE.COM "
-	kadmin.local -q "addprinc -randkey yarn/localhost@EXAMPLE.COM   "
-	kadmin.local -q "addprinc -randkey HTTP/localhost@EXAMPLE.COM   "
-	kadmin.local -q "addprinc -randkey hive/localhost@EXAMPLE.COM   "
-	kadmin.local -q "addprinc -randkey admin/localhost@EXAMPLE.COM  "
-	kadmin.local -q "addprinc -randkey test/localhost@EXAMPLE.COM   "
+	kadmin.local -q "addprinc -randkey hdfs/localhost@EXAMPLE.COM"
+	kadmin.local -q "addprinc -randkey mapred/localhost@EXAMPLE.COM"
+	kadmin.local -q "addprinc -randkey yarn/localhost@EXAMPLE.COM"
+	kadmin.local -q "addprinc -randkey HTTP/localhost@EXAMPLE.COM"
+	kadmin.local -q "addprinc -randkey hive/localhost@EXAMPLE.COM"
+	kadmin.local -q "addprinc -randkey admin/localhost@EXAMPLE.COM"
+	kadmin.local -q "addprinc -randkey test/localhost@EXAMPLE.COM"
 
 	kadmin.local -q "xst -norandkey -k /etc/hadoop/conf/hdfs.keytab hdfs/localhost@EXAMPLE.COM HTTP/localhost@EXAMPLE.COM"
 	kadmin.local -q "xst -norandkey -k /etc/hadoop/conf/mapred.keytab mapred/localhost@EXAMPLE.COM HTTP/localhost@EXAMPLE.COM"
-	kadmin.local -q "xst -norandkey -k /etc/hadoop/conf/yarn.keytab yarn/localhost@EXAMPLE.COM HTTP/localhost@EXAMPLE.COM "
-	kadmin.local -q "xst -norandkey -k /etc/hive/conf/hive.keytab hive/localhost@EXAMPLE.COM "
-	kadmin.local -q "xst -norandkey -k /etc/hive/conf/admin.keytab admin/localhost@EXAMPLE.COM "
-	kadmin.local -q "xst -norandkey -k /etc/hive/conf/test.keytab test/localhost@EXAMPLE.COM "
+	kadmin.local -q "xst -norandkey -k /etc/hadoop/conf/yarn.keytab yarn/localhost@EXAMPLE.COM HTTP/localhost@EXAMPLE.COM"
+	kadmin.local -q "xst -norandkey -k /etc/hive/conf/hive.keytab hive/localhost@EXAMPLE.COM"
+	kadmin.local -q "xst -norandkey -k /etc/hive/conf/admin.keytab admin/localhost@EXAMPLE.COM"
+	kadmin.local -q "xst -norandkey -k /etc/hive/conf/test.keytab test/localhost@EXAMPLE.COM"
 
 	groupadd hadoop;useradd test;useradd kb5test;useradd admin;useradd hdfs -g hadoop -p hdfs;useradd hive -g hadoop -p hive;useradd yarn -g hadoop -p yarn;useradd mapred -g hadoop -p mapred
 
@@ -327,430 +250,25 @@ install_hadoop()
 	hadoop version
 	cd /bigdata/hadoop-2.6.0/etc/hadoop/
 	# 修改hadoop的配置文件
-	# cp -f 
-	cat <<-EOF > /bigdata/hadoop-2.6.0/etc/hadoop/ssl-server.xml
-	<?xml version="1.0"?>
-	<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
-	<!--
-	   Licensed to the Apache Software Foundation (ASF) under one or more
-	   contributor license agreements.  See the NOTICE file distributed with
-	   this work for additional information regarding copyright ownership.
-	   The ASF licenses this file to You under the Apache License, Version 2.0
-	   (the "License"); you may not use this file except in compliance with
-	   the License.  You may obtain a copy of the License at
-	
-	       http://www.apache.org/licenses/LICENSE-2.0
-	
-	   Unless required by applicable law or agreed to in writing, software
-	   distributed under the License is distributed on an "AS IS" BASIS,
-	   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-	   See the License for the specific language governing permissions and
-	   limitations under the License.
-	-->
-	<configuration>
-	
-		<property>
-			<name>ssl.server.truststore.location</name>
-			<value>/etc/hadoop/https/truststore</value>
-			<description>Truststore to be used by NN and DN. Must be specified.</description>
-		</property>
-		
-		<property>
-			<name>ssl.server.truststore.password</name>
-			<value>123456</value>
-			<description>Optional. Default value is "".</description>
-		</property>
-		
-		<property>
-			<name>ssl.server.truststore.type</name>
-			<value>jks</value>
-			<description>Optional. The keystore file format, default value is "jks".</description>
-		</property>
-		
-		<property>
-			<name>ssl.server.truststore.reload.interval</name>
-			<value>10000</value>
-			<description>Truststore reload check interval, in milliseconds.Default value is 10000 (10 seconds).</description>
-		</property>
-		
-		<property>
-			<name>ssl.server.keystore.location</name>
-			<value>/etc/hadoop/https/keystore</value>
-			<description>Keystore to be used by NN and DN. Must be specified.</description>
-		</property>
-		
-		<property>
-			<name>ssl.server.keystore.password</name>
-			<value>123456</value>
-			<description>Must be specified.</description>
-		</property>
-		
-		<property>
-			<name>ssl.server.keystore.keypassword</name>
-			<value>123456</value>
-			<description>Must be specified.</description>
-		</property>
-		
-		<property>
-			<name>ssl.server.keystore.type</name>
-			<value>jks</value>
-			<description>Optional. The keystore file format, default value is "jks".</description>
-		</property>
-	
-	</configuration>
-	EOF
-	# config 
-	cat <<-EOF > /bigdata/hadoop-2.6.0/etc/hadoop/ssl-client.xml
-	<?xml version="1.0"?>
-	<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
-	<!--
-	   Licensed to the Apache Software Foundation (ASF) under one or more
-	   contributor license agreements.  See the NOTICE file distributed with
-	   this work for additional information regarding copyright ownership.
-	   The ASF licenses this file to You under the Apache License, Version 2.0
-	   (the "License"); you may not use this file except in compliance with
-	   the License.  You may obtain a copy of the License at
-	
-	       http://www.apache.org/licenses/LICENSE-2.0
-	
-	   Unless required by applicable law or agreed to in writing, software
-	   distributed under the License is distributed on an "AS IS" BASIS,
-	   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-	   See the License for the specific language governing permissions and
-	   limitations under the License.
-	-->
-	<configuration>
-	
-		<property>
-			<name>ssl.client.truststore.location</name>
-			<value>/etc/hadoop/https/truststore</value>
-			<description>Truststore to be used by clients like distcp. Must bespecified.</description>
-		</property>
-		
-		<property>
-			<name>ssl.client.truststore.password</name>
-			<value>123456</value>
-			<description>Optional. Default value is "".</description>
-		</property>
-		
-		<property>
-			<name>ssl.client.truststore.type</name>
-			<value>jks</value>
-			<description>Optional. The keystore file format, default value is "jks".</description>
-		</property>
-		
-		<property>
-			<name>ssl.client.truststore.reload.interval</name>
-			<value>10000</value>
-			<description>Truststore reload check interval, in milliseconds.Default value is 10000 (10 seconds).</description>
-		</property>
-		
-		<property>
-			<name>ssl.client.keystore.location</name>
-			<value>/etc/hadoop/https/keystore</value>
-			<description>Keystore to be used by clients like distcp. Must bespecified.</description>
-		</property>
-		
-		<property>
-			<name>ssl.client.keystore.password</name>
-			<value>123456</value>
-			<description>Optional. Default value is "".</description>
-		</property>
-		
-		<property>
-			<name>ssl.client.keystore.keypassword</name>
-			<value>123456</value>
-			<description>Optional. Default value is "".</description>
-		</property>
-		
-		<property>
-			<name>ssl.client.keystore.type</name>
-			<value>jks</value>
-			<description>Optional. The keystore file format, default value is "jks".</description>
-		</property>
-		
-	</configuration>
-	EOF
+	cd $WORKSPACE
+	\cp -f $WORKSPACE/../scripts/conf/hadoop/ssl-server.xml $INSTALL_PATH/hadoop-2.6.0/etc/hadoop/
 
-	cat <<-EOF > /bigdata/hadoop-2.6.0/etc/hadoop/core-site.xml
-	<?xml version="1.0" encoding="UTF-8"?>
-	<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
-	<!--
-	  Licensed under the Apache License, Version 2.0 (the "License");
-	  you may not use this file except in compliance with the License.
-	  You may obtain a copy of the License at
-	
-	    http://www.apache.org/licenses/LICENSE-2.0
-	
-	  Unless required by applicable law or agreed to in writing, software
-	  distributed under the License is distributed on an "AS IS" BASIS,
-	  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-	  See the License for the specific language governing permissions and
-	  limitations under the License. See accompanying LICENSE file.
-	-->
-	
-	<!-- Put site-specific property overrides in this file. -->
-	
-	<configuration>
-		<property>
-	        <name>hadoop.tmp.dir</name>
-	        <value>file:/usr/local/hadoop/tmp</value>
-	        <description>Abase for other temporary directories.</description>
-	    </property>
-	    <property>
-	        <name>fs.defaultFS</name>
-	        <value>hdfs://localhost:9000</value>
-	    </property>
-		<property>
-			<name>hadoop.proxyuser.hive.hosts</name>
-			<value>*</value>
-		</property>
-		<property>
-			<name>hadoop.proxyuser.hive.groups</name>
-			<value>*</value>
-		</property>
-		<property>
-			<name>hadoop.proxyuser.hdfs.hosts</name>
-			<value>*</value>
-		</property>
-		<property>
-			<name>hadoop.proxyuser.hdfs.groups</name>
-			<value>*</value>
-		</property>
-		<property>
-			<name>hadoop.proxyuser.HTTP.hosts</name>
-			<value>*</value>
-		</property>
-		<property>
-			<name>hadoop.proxyuser.HTTP.groups</name>
-			<value>*</value>
-		</property>
-		<property>
-			<name>hadoop.proxyuser.yarn.hosts</name>
-			<value>*</value>
-		</property>
-		<property>
-			<name>hadoop.proxyuser.yarn.groups</name>
-			<value>*</value>
-		</property>
-			<property>
-			<name>hadoop.security.authorization</name>
-			<value>true</value>
-		</property>
-		<property>
-			<name>hadoop.security.authentication</name>
-			<value>kerberos</value>
-		</property>
-		<property>
-			<name>hadoop.proxyuser.yarn.hosts</name>
-			<value>*</value>
-		</property>
-		<property>
-			<name>hadoop.proxyuser.yarn.groups</name>
-			<value>*</value>
-		</property>
-	</configuration>
-	EOF
+	\cp -f $WORKSPACE/../scripts/conf/hadoop/ssl-client.xml $INSTALL_PATH/hadoop-2.6.0/etc/hadoop/
 
-	cat <<-EOF > /bigdata/hadoop-2.6.0/etc/hadoop/hdfs-site.xml
-	<?xml version="1.0" encoding="UTF-8"?>
-	<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
-	<!--
-	  Licensed under the Apache License, Version 2.0 (the "License");
-	  you may not use this file except in compliance with the License.
-	  You may obtain a copy of the License at
-	
-	    http://www.apache.org/licenses/LICENSE-2.0
-	
-	  Unless required by applicable law or agreed to in writing, software
-	  distributed under the License is distributed on an "AS IS" BASIS,
-	  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-	  See the License for the specific language governing permissions and
-	  limitations under the License. See accompanying LICENSE file.
-	-->
-	
-	<!-- Put site-specific property overrides in this file. -->
-	
-	<configuration>
-		<property>
-	        <name>dfs.replication</name>
-	        <value>1</value>
-		</property>
-	    <property>
-	        <name>dfs.namenode.name.dir</name>
-	        <value>file:/usr/local/hadoop/tmp/dfs/name</value>
-	    </property>
-	    <property>
-	        <name>dfs.datanode.data.dir</name>
-	        <value>file:/usr/local/hadoop/tmp/dfs/data</value>
-	    </property>
-	  	<property>
-			<name>dfs.block.access.token.enable</name>
-			<value>true</value>
-	  	</property>
-		<property>
-			<name>dfs.namenode.keytab.file</name>
-			<value>/etc/hadoop/conf/hdfs.keytab</value>
-	  	</property>
-	  	<property>
-			<name>dfs.namenode.kerberos.principal</name>
-			<value>hdfs/localhost@EXAMPLE.COM</value>
-	  	</property>
-	  	<property>
-			<name>dfs.namenode.kerberos.internal.spnego.principal</name>
-			<value>HTTP/localhost@EXAMPLE.COM</value>
-	  	</property>
-	  	<property>
-			<name>dfs.secondary.namenode.keytab.file</name>
-			<value>/etc/hadoop/conf/hdfs.keytab</value>
-	  	</property>
-	  	<property>
-			<name>dfs.secondary.namenode.kerberos.principal</name>
-			<value>hdfs/localhost@EXAMPLE.COM</value>
-	  	</property>
-	  	<property>
-			<name>dfs.secondary.namenode.kerberos.internal.spnego.principal</name>
-			<value>HTTP/localhost@EXAMPLE.COM</value>
-	  	</property>
-		<property>
-			<name>dfs.datanode.data.dir.perm</name>
-			<value>700</value> 
-	  	</property>
-		<property>  
-			<name>dfs.datanode.address</name>
-			<value>0.0.0.0:50010</value>
-	  	</property>
-	  	<property>
-			<name>dfs.datanode.http.address</name>
-			<value>0.0.0.0:50075</value>
-	  	</property>-->
-	  	<property>
-			<name>dfs.datanode.keytab.file</name>
-			<value>/etc/hadoop/conf/hdfs.keytab</value>
-	  	</property>
-	  	<property>
-			<name>dfs.datanode.kerberos.principal</name>
-			<value>hdfs/localhost@EXAMPLE.COM</value>
-	  	</property>
-		<property>
-			<name>dfs.web.authentication.kerberos.principal</name>
-			<value>HTTP/localhost@EXAMPLE.COM</value>
-	  	</property>
-	  	<property>
-			<name>dfs.journalnode.keytab.file</name>
-			<value>/etc/hadoop/conf/hdfs.keytab</value>
-	  	</property>
-	  	<property>
-			<name>dfs.journalnode.kerberos.principal</name>
-			<value>hdfs/localhost@EXAMPLE.COM</value>
-	  	</property>
-	  	<property>
-			<name>dfs.journalnode.kerberos.internal.spnego.principal</name>
-			<value>HTTP/localhost@EXAMPLE.COM</value>
-	  	</property>
-	  	<property>
-			<name>dfs.data.transfer.protection</name>
-			<value>integrity</value>
-	  	</property>
-	  	<property>
-	　　	<name>dfs.http.policy</name>
-	　　　　<value>HTTPS_ONLY</value>
-		</property>
-	</configuration>
-	EOF
+	\cp -f $WORKSPACE/../scripts/conf/hadoop/core-site.xml $INSTALL_PATH/hadoop-2.6.0/etc/hadoop/
 
-	cat <<-EOF > /bigdata/hadoop-2.6.0/etc/hadoop/yarn-site.xml
-	<?xml version="1.0"?>
-	<!--
-	  Licensed under the Apache License, Version 2.0 (the "License");
-	  you may not use this file except in compliance with the License.
-	  You may obtain a copy of the License at
-	
-	    http://www.apache.org/licenses/LICENSE-2.0
-	
-	  Unless required by applicable law or agreed to in writing, software
-	  distributed under the License is distributed on an "AS IS" BASIS,
-	  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-	  See the License for the specific language governing permissions and
-	  limitations under the License. See accompanying LICENSE file.
-	-->
-	<configuration>
-		<property>
-	        <name>yarn.nodemanager.aux-services</name>
-	        <value>mapreduce_shuffle</value>
-	    </property>
-	  	<property>
-			<name>yarn.resourcemanager.keytab</name>
-			<value>/etc/hadoop/conf/yarn.keytab</value>
-	 	</property>
-	  	<property>
-			<name>yarn.resourcemanager.principal</name>
-			<value>yarn/localhost@EXAMPLE.COM</value>
-	  	</property>
-	  	<property>
-			<name>yarn.nodemanager.keytab</name>
-			<value>/etc/hadoop/conf/yarn.keytab</value>
-	  	</property>
-	  	<property>
-			<name>yarn.nodemanager.principal</name>
-			<value>yarn/localhost@EXAMPLE.COM</value>
-	  	</property>
-	  	<property>
-			<name>yarn.resourcemanager.proxy-user-privileges.enabled</name>
-			<value>true</value>
-	    </property>
-	</configuration>
-	EOF
+	\cp -f $WORKSPACE/../scripts/conf/hadoop/hdfs-site.xml $INSTALL_PATH/hadoop-2.6.0/etc/hadoop/
 
-	cat <<-EOF > /bigdata/hadoop-2.6.0/etc/hadoop/mapred-site.xml
-	<?xml version="1.0"?>
-	<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
-	<!--
-	  Licensed under the Apache License, Version 2.0 (the "License");
-	  you may not use this file except in compliance with the License.
-	  You may obtain a copy of the License at
-	
-	    http://www.apache.org/licenses/LICENSE-2.0
-	
-	  Unless required by applicable law or agreed to in writing, software
-	  distributed under the License is distributed on an "AS IS" BASIS,
-	  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-	  See the License for the specific language governing permissions and
-	  limitations under the License. See accompanying LICENSE file.
-	-->
-	
-	<!-- Put site-specific property overrides in this file. -->
-	
-	<configuration>
-	    <property>
-	        <name>mapreduce.framework.name</name>
-	        <value>yarn</value>
-	    </property>
-		<property>
-		     <name>mapreduce.jobhistory.keytab</name>
-		     <value>/etc/hadoop/conf/mapred.keytab</value>
-		</property>
-		<property>
-		     <name>mapreduce.jobhistory.principal</name>
-		     <value>mapred/localhost@EXAMPLE.COM</value>
-		</property>
-		<property>
-		     <name>mapreduce.jobhistory.webapp.spnego-principal</name>
-		     <value>HTTP/localhost@EXAMPLE.COM</value>
-		</property>
-		<property>
-		     <name>mapreduce.jobhistory.webapp.spnego-keytab-file</name>
-		     <value>/etc/hadoop/conf/mapred.keytab</value>
-		</property>
-	</configuration>
-	EOF
+	\cp -f $WORKSPACE/../scripts/conf/hadoop/yarn-site.xml $INSTALL_PATH/hadoop-2.6.0/etc/hadoop/
 
-	mkdir -p /bigdata/hadoop-2.6.0/logs
-	chmod -R 755 /bigdata
-	chmod -R 777 /bigdata/hadoop-2.6.0
+	\cp -f $WORKSPACE/../scripts/conf/hadoop/mapred-site.xml $INSTALL_PATH/hadoop-2.6.0/etc/hadoop/
+
+	mkdir -p $INSTALL_PATH/hadoop-2.6.0/logs
+	chmod -R 755 $INSTALL_PATH
+	chmod -R 777 $INSTALL_PATH/hadoop-2.6.0
 
 	hdfs namenode -format
-	chmod -R 777 /usr/local/hadoop
+	chmod -R 777 $INSTALL_PATH/hadoop
 
 	su - hdfs <<-EOF
 	kinit -kt /etc/hadoop/conf/hdfs.keytab hdfs/localhost@EXAMPLE.COM;
@@ -778,11 +296,8 @@ install_sentry()
 {	
 	echo "开始编译安装sentry........................................."
 	sleep 2
-	cd /bigdata
 	rpmdev-setuptree
 	cp $WORKSPACE/../spec/sentry.spec ~/rpmbuild/SPECS/
-	git clone https://gitee.com/bberzhou/sentry.git
-	cd sentry/spec/
 	cp $WORKSPACE/../spec/apache-sentry-1.6.0_rc0.tar.gz ~/rpmbuild/SOURCES/
 	
 	cd ~/rpmbuild/SPECS
@@ -797,119 +312,7 @@ install_sentry()
 	cp $DOWNLOAD_PATH/mysql-connector-java-5.1.47.jar $INSTALL_PATH/apache-sentry/apache-sentry-1.6.0-incubating-bin/lib/
 
 	# sentry config
-	cat <<-EOF > /usr/local/apache-sentry/apache-sentry-1.6.0-incubating-bin/conf/sentry-site.xml
-	<?xml version="1.0"?>
-	<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
-	<!--
-	   Licensed to the Apache Software Foundation (ASF) under one or more
-	   contributor license agreements.  See the NOTICE file distributed with
-	   this work for additional information regarding copyright ownership.
-	   The ASF licenses this file to You under the Apache License, Version 2.0
-	   (the "License"); you may not use this file except in compliance with
-	   the License.  You may obtain a copy of the License at
-	
-	       http://www.apache.org/licenses/LICENSE-2.0
-	
-	   Unless required by applicable law or agreed to in writing, software
-	   distributed under the License is distributed on an "AS IS" BASIS,
-	   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-	   See the License for the specific language governing permissions and
-	   limitations under the License.
-	-->
-	
-	<!-- WARNING!!! This file is provided for documentation purposes ONLY!              -->
-	<!-- WARNING!!! You should copy to sentry-site.xml and make modification instead.   -->
-	
-	<configuration>
-		<property>
-			<name>sentry.service.allow.connect</name>
-			<value>hive,admin</value>
-			<description>comma separated list of users - List of users that are allowed to connect to the service (eg Hive, Impala) </description>
-	  	</property>
-	  	<property>
-			<name>sentry.store.jdbc.url</name>
-			<value>jdbc:mysql://localhost:3306/sentry?createDatabaseIfNotExist=true&amp;useSSL=false</value>
-			<description>JDBC connection URL for the backed DB</description>
-	  	</property>
-	  	<property>
-			<name>sentry.store.jdbc.user</name>
-			<value>root</value>
-			<description>Userid for connecting to backend db </description>
-	  	</property>
-	  	<property>
-			<name>sentry.store.jdbc.password</name>
-			<value>123456</value>
-			<description>Sentry password for backend JDBC user </description>
-	  	</property>
-	  	<property>
-			<name>sentry.service.server.rpcport</name>
-			<value>8038</value>
-			<description> TCP port number for service</description>
-	  	</property>
-		<property>
-			<name>sentry.service.server.rpcaddress</name>
-			<value>0.0.0.0</value>
-			<description> TCP interface for service to bind to</description>
-		</property>
-	
-		<property>
-			<name>sentry.store.jdbc.driver</name>
-			<value>com.mysql.jdbc.Driver</value>
-			<description>Backend JDBC driver - org.apache.derby.jdbc.EmbeddedDriver (only when dbtype = derby) JDBC Driver class for the backed DB</description>
-		</property>
-		<property>
-			<name>sentry.service.admin.group</name>
-			<value>admin</value>
-			<description>Comma separates list of groups.  List of groups allowed to make policy updates</description>
-		</property>
-		<property>
-			<name>sentry.store.group.mapping</name>
-			<value>org.apache.sentry.provider.common.HadoopGroupMappingService</value>
-			<description>Group mapping class for Sentry service. org.apache.sentry.provider.file.LocalGroupMapping service can be used for local group mapping. </description>
-		</property>
-		<property>
-			<name>sentry.service.security.mode</name>
-			<value>none</value>
-			<description>Options: kerberos, none.  Authentication mode for Sentry service. Currently supports Kerberos and trusted mode </description>
-		</property>
-		<property>
-			<name>sentry.service.server.principal</name>
-			<value> </value>
-		</property>
-		<property>
-			<name>sentry.service.server.keytab</name>
-			<value> </value>
-		</property>
-		<property>
-			<name>sentry.service.reporting</name>
-			<value>JMX</value>
-		</property>
-		<property>
-			<name>sentry.service.server.rpc-address</name>
-			<value>localhost</value>
-		</property>
-		<property>
-			<name>sentry.service.server.rpc-port</name>
-			<value>8038</value>
-		</property>
-		<property>
-			<name>sentry.hive.server</name>
-			<value>server1</value>
-		</property>
-		<property>
-			<name>sentry.service.web.enable</name>
-			<value>true</value>
-		</property>
-		<property>
-			<name>sentry.service.web.port</name>
-			<value>51000</value>
-		</property>
-		<property>
-			<name>sentry.service.web.authentication.type</name>
-			<value>NONE</value>
-		</property>
-	</configuration>
-	EOF
+	\cp -f $WORKSPACE/../scripts/conf/sentey/sentry-site.xml $INSTALL_PATH/apache-sentry/apache-sentry-1.6.0-incubating-bin/conf/
 
 	chmod -R 755 $INSTALL_PATH/apache-sentry/apache-sentry-1.6.0-incubating-bin
 	cp $INSTALL_PATH/apache-sentry/apache-sentry-1.6.0-incubating-bin/lib/jline-2.12.jar ${HADOOP_HOME}/share/hadoop/yarn/lib/
@@ -927,137 +330,11 @@ install_hive()
 	sleep 2
 	cd $INSTALL_PATH
 	tar -zxf $DOWNLOAD_PATH/apache-hive-1.1.0-bin.tar.gz -C ./
-	cd apache-hive-1.1.0-bin/
 	cp $DOWNLOAD_PATH/mysql-connector-java-5.1.47.jar $INSTALL_PATH/apache-hive-1.1.0-bin/lib/
+	\cp -f $WORKSPACE/../scripts/conf/hive/sentry-site.xml $INSTALL_PATH/apache-hive-1.1.0-bin/conf/
 
-	cat <<-EOF > /bigdata/apache-hive-1.1.0-bin/conf/sentry-site.xml
-	<configuration>
-		<property>
-			<name>sentry.service.client.server.rpc-address</name>
-			<value>localhost</value>
-		</property>
-		<property>
-			<name>sentry.service.client.server.rpc-port</name>
-			<value>8038</value>
-		</property>
-		<property>
-			<name>sentry.service.client.server.rpc-connection-timeout</name>
-			<value>200000</value>
-		</property>
-		<!--配置认证-->
-		<property>
-			<name>sentry.service.security.mode</name>
-			<value>none</value>
-		</property>
-	
-		<property>
-			<name>sentry.service.server.principal</name>
-			<value> </value>
-		</property>
-			<property>
-			<name>sentry.service.server.keytab</name>
-			<value> </value>
-		</property>
-		<property>
-			<name>sentry.provider</name>
-			<value>org.apache.sentry.provider.file.HadoopGroupResourceAuthorizationProvider</value>
-		</property>
-		<property>
-			<name>sentry.hive.provider.backend</name>
-			<value>org.apache.sentry.provider.db.SimpleDBProviderBackend</value>
-		</property>
-		<property>
-			<name>sentry.metastore.service.users</name>
-			<value>hive</value>
-		<!--queries made by hive user (beeline) skip meta store check-->
-		</property>
-		<property>
-			<name>sentry.hive.server</name>
-			<value>server1</value>
-		</property>
-		<property>
-			<name>sentry.hive.testing.mode</name>
-			<value>true</value>
-		</property>
-	</configuration>
-	EOF
+	\cp -f $WORKSPACE/../scripts/conf/hive/hive-site.xml $INSTALL_PATH/apache-hive-1.1.0-bin/conf/
 
-	cat <<-EOF > /bigdata/apache-hive-1.1.0-bin/conf/hive-site.xml 
-	<configuration>
-		<property>
-			<name>javax.jdo.option.ConnectionURL</name>
-			<value>jdbc:mysql://localhost:3306/hive?createDatabaseIfNotExist=true&amp;useSSL=false</value> 
-		</property>
-		<property> 
-			<name>javax.jdo.option.ConnectionDriverName</name>
-			<value>com.mysql.jdbc.Driver</value> 
-		</property>
-		<property> 
-			<name>javax.jdo.option.ConnectionUserName</name> 
-			<value>root</value>
-		</property>
-		<property> 
-			<name>javax.jdo.option.ConnectionPassword</name> 
-			<value>123456</value>
-		</property>
-		<property> 
-			<name>hive.server2.thrift.bind.host</name>
-			<value>localhost</value>
-		</property>
-		<property>
-			<name>hive.server2.thrift.port</name>
-			<value>10000</value>
-		</property>
-		<property>
-			<name>hive.sentry.conf.url</name>
-			<value>file:///bigdata/apache-hive-1.1.0-bin/conf/sentry-site.xml</value>
-		</property>
-		<property>
-			<name>hive.stats.collect.scancols</name>
-			<value>true</value>
-		</property>
-		<property>
-			<name>hive.metastore.pre.event.listeners</name>
-			<value>org.apache.sentry.binding.metastore.MetastoreAuthzBinding</value>
-		</property>
-		<property>
-			<name>hive.metastore.event.listeners</name>
-			<value>org.apache.sentry.binding.metastore.SentryMetastorePostEventListener</value>
-		</property>
-		<property>
-			<name>hive.server2.session.hook</name>
-			<value>org.apache.sentry.binding.hive.HiveAuthzBindingSessionHook</value>
-		</property>
-		<property>
-			<name>hive.security.authorization.task.factory</name>
-			<value>org.apache.sentry.binding.hive.SentryHiveAuthorizationTaskFactoryImpl</value>
-		</property>
-		<property>
-			<name>hive.server2.authentication</name>
-			<value>KERBEROS</value>
-		</property>
-		<property>
-			<name>hive.server2.authentication.kerberos.principal</name>
-			<value>hive/localhost@EXAMPLE.COM</value>
-		</property>
-		<property>
-			<name>hive.server2.authentication.kerberos.keytab</name>
-			<value>/etc/hive/conf/hive.keytab</value>
-		</property>
-		<property>
-			<name>hive.metastore.sasl.enabled</name>
-			<value>true</value>
-		</property>
-		<property>
-			<name>hive.metastore.kerberos.keytab.file</name>
-			<value>/etc/hive/conf/hive.keytab</value>
-		</property>
-		<property>
-			<name>hive.metastore.kerberos.principal</name>
-			<value>hive/localhost@EXAMPLE.COM</value>
-		</property>
-	</configuration>	
-	EOF
 	cp ${SENTRY_HOME}/lib/sentry*.jar ${HIVE_HOME}/lib
 	cp ${SENTRY_HOME}/lib/shiro-*.jar ${HIVE_HOME}/lib
 	chmod -R 755 $INSTALL_PATH/apache-hive-1.1.0-bin
@@ -1092,7 +369,6 @@ install_hive()
 main(){
 	download_pkg
 	install_depends
-	env_enable
 	install_maven
 	install_mysql
 	install_kerberos
